@@ -1,4 +1,4 @@
-import requests, urllib2
+import requests, urllib2, re
 from bs4 import BeautifulSoup as bs
 def ripVids(url):
     """Finds the url of the video of the supplied link of the episode, url = episode url, returns a dict with keys as resolution and values as links"""
@@ -7,7 +7,7 @@ def ripVids(url):
     try:
         r = requests.get(url)
     except requests.ConnectionError:
-        print "Please check internet connection."
+        print("Please check internet connection.")
         
     soup = bs(r.text, 'lxml')
     vids = soup.find('video')
@@ -22,7 +22,7 @@ def obtainURLs(url):
     try:
         r = requests.get(url)
     except requests.ConnectionError:
-        print "Please check internet connection."
+        print("Please check internet connection.")
     soup = bs(r.text, 'lxml')
     title = soup.find('title')
     titleText = title.get_text()
@@ -55,8 +55,8 @@ def WriteToCrawlJob(pkgname, nesteddicts):
     f = open(pkgname+'.crawljob','wb')
     for i in nesteddicts:
         for n in nesteddicts[i]:
-            f.write('->NEW ENTRY<-\n    text={link}\n    filename=[{defi}]{epsname}\n    packageName={pkgn}\n'.format(link = nesteddicts[i][n], defi = n, epsname = i.replace('|',""), pkgn = pkgname))
-
+            f.write('->NEW ENTRY<-\n    text={link}\n    filename=[{defi}]{pkgn} {epsname}.mp4\n    packageName={pkgn}\n'.format(link = nesteddicts[i][n], defi = n, epsname = i.replace('|',""), pkgn = pkgname))
+    f.close()
 def main():
     """Compile everything together, insert only URL"""
 
@@ -65,7 +65,7 @@ def main():
     d1, text = obtainURLs(url)
     for i in d1:
         df[i] = ripVids(d1[i])
-    WriteToCrawlJob(text, df)
+    WriteToCrawlJob(re.sub(r'[^\w]', ' ', text), df)
 
 if __name__ == "__main__":
     main()
