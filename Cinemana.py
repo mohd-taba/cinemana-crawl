@@ -1,71 +1,66 @@
-import requests, urllib2, re
-from bs4 import BeautifulSoup as bs
-def ripVids(url):
-    """Finds the url of the video of the supplied link of the episode, url = episode url, returns a dict with keys as resolution and values as links"""
+import requests
 
-    print "Ripping " + url
-    try:
-        r = requests.get(url)
-    except requests.ConnectionError:
-        print("Please check internet connection.")
+seasonAPI = "https://cinemana.shabakaty.com/api/android/videoSeason/id/{season_id}"
+filesAPI = "https://cinemana.shabakaty.com/api/android/transcoddedFiles/id/{episode_id}"
+videoInfoAPI = "https://cinemana.shabakaty.com/api/android/allVideoInfo/id/{episode_id}"
+import pdb
+
+class Episode:
+    def __init__(self, ID, episodeNumber, seasonNumber, showID, showName):
+        self.ID = ID
+        self.episodeNumber = episodeNumber
+        self.seasonNumber = seasonNumber
+        self.showID = showID
+        self.url_dict = {}
+        self.subs = {}
+        r = requests.get(filesAPI.format(episode_id=self.ID))
+        rr = requests.get(videoInfoAPI.format(episode_id=self.ID))
+        jj = rr.json()
+        j = r.json()
+        for url in j:
+            self.url_dict[url['resolution']] = url['videoUrl']
+        try:
+            for url in jj['translations']:
+                if url['extention'] == 'srt':
+                    self.subs[url['name']] = url['file']
+        except:
+            pass
+            
+
+class Show:
+    def __init__(self, url):
+        self.url = url
+        self.ID = self.getID(self.formatString(url))
+        self.episodes = []
+        self.title = ""
+        r = requests.get(seasonAPI.format(season_id=self.ID))
+        for episode in r.json():
+            self.title = episode["en_title"]
+            self.episodes.append(Episode(episode["nb"], episode["episodeNummer"], episode["season"], episode["rootSeries"], episode["en_title"]))
         
-    soup = bs(r.text, 'lxml')
-    vids = soup.find('video')
-    vids = vids.findAll('source')
-    dic = {}
-    for i in vids:
-        dic[i['data-res']] = i['src']
-    return dic
+    def formatString(self, string):
+        return string.split("/")[-1] if string.split("/")[-1] != "" else string.split("/")[-2]
 
-def obtainURLs(url):
-    """Finds all episodes of certain series of supplied episode link, return a dict with number of eps and link of eps"""
-    try:
-        r = requests.get(url)
-    except requests.ConnectionError:
-        print("Please check internet connection.")
-    soup = bs(r.text, 'lxml')
-    title = soup.find('title')
-    titleText = title.get_text()
-    linkstag = soup.find('div', {'id':'myTabContent'})
-    linksList = linkstag.findAll('a')
-    ld = {}
-    for i in linksList:
-        ld[i.get_text()] = i['href']
-        print i.get_text(), "Just got added"
-    return ld, titleText.strip()
-   
-def DownloadFile(url, name):
-    """Download specific video requires video url, and name of file"""
+    def getID(self, string):
+        if string.find("?"):
+            return string.split("?")[0]
+        else:
+            return string
 
-    print "Downloading " + name
-    try:
-        r = requests.get(url)
-    except requests.ConnectionError:
-        print "Please check internet connection."
-    f = open(name.replace('|',''), 'wb')
-    for chunk in r.iter_content(chunk_size=512 * 1024): 
-        if chunk: # filter out keep-alive new chunks
-            f.write(chunk)
-    f.close()
-    return
+    def WriteToCrawlJob(self):
+        """Function to create a jDownloader CrawlJob file, filename being the season followed by episode number."""
+        path = r"C:\Users\NameTBA\Documents\FolderWatch\{filename}.crawljob"
+        f = open(path.format(filename=self.ID),'w')
+        for episode in self.episodes:
+            for definition, url in episode.url_dict.items():
+                f.write('->NEW ENTRY<-\n    text={link}\n    filename=[{defi}] - {pkgn} - S{seasonn}E{epsn}.mp4\n    packageName={pkgn}\n'.format(link = url, defi = definition, epsn = episode.episodeNumber.zfill(2),seasonn = episode.seasonNumber.zfill(2) , pkgn = self.title))
+        f.close()
 
-def WriteToCrawlJob(pkgname, nesteddicts):
-    """Function to create a jDownloader CrawlJob file, filename being the season followed by episode number."""
-
-    f = open(pkgname+'.crawljob','wb')
-    for i in nesteddicts:
-        for n in nesteddicts[i]:
-            f.write('->NEW ENTRY<-\n    text={link}\n    filename=[{defi}]{pkgn} {epsname}.mp4\n    packageName={pkgn}\n'.format(link = nesteddicts[i][n], defi = n, epsname = i.replace('|',""), pkgn = pkgname))
-    f.close()
 def main():
-    """Compile everything together, insert only URL"""
-
-    url = raw_input("Input URL:\n")
-    df = {}
-    d1, text = obtainURLs(url)
-    for i in d1:
-        df[i] = ripVids(d1[i])
-    WriteToCrawlJob(re.sub(r'[^\w]', ' ', text), df)
+    while True:
+        s = Show(input("Cinemana URL?\n"))
+        s.WriteToCrawlJob()
 
 if __name__ == "__main__":
     main()
+
